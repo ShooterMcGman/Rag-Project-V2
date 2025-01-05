@@ -1,0 +1,15 @@
+# Ignore data and virtual environments
+data/raw_data/
+data/processed_data/
+venv/
+.DS_Store
+__pycache__/
+*.log
+*.ipynb_checkpoints
+
+# Ignore Python-specific artifacts
+*.pyc
+*.pyo
+
+# Ignore Docker and deployment files (if not tracked)
+docker-compose.override.yml

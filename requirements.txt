@@ -1,0 +1,6 @@
+PyPDF2==3.0.1
+python-docx==1.1.2
+PyMuPDF==1.20.7
+jupyter==1.0.0
+matplotlib==3.10.0  # Optional for visualization
+pytest==8.3.4       # Optional for testing
