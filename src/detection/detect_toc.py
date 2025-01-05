@@ -1,23 +1,22 @@
-import sys
+# src/detection/detect_toc.py
+
 import os
 import re
 import logging
 from PyPDF2 import PdfReader
 from docx import Document
-from src.utils.git_utils import auto_commit_push
-
-# Add the root directory to sys.path
-current_file = os.path.abspath(__file__)
-project_root = os.path.abspath(os.path.join(os.path.dirname(current_file), "../../"))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# Configure logging
-logging.basicConfig(
-    filename=os.path.join(project_root, "logs", "detection_errors.log"),
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+from .config import (
+    PROJECT_ROOT,
+    SUPPORTED_FORMATS,
+    PDF_TOC_REGEX,
+    DOCX_TOC_REGEX
 )
+from .exceptions import (
+    TOCDetectionError,
+    UnsupportedFileFormatError,
+    FileProcessingError
+)
+from .utils import validate_file_path
 
 def detect_toc(file_path):
     """
@@ -31,65 +30,52 @@ def detect_toc(file_path):
     """
     logging.info(f"Starting TOC detection for file: {file_path}")
     try:
-        if file_path.endswith(".pdf"):
+        validate_file_path(file_path, SUPPORTED_FORMATS)
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext == ".pdf":
             result = detect_toc_pdf(file_path)
-        elif file_path.endswith(".docx"):
+        elif ext == ".docx":
             result = detect_toc_docx(file_path)
         else:
-            raise ValueError("Unsupported file format. Only PDF and DOCX are supported.")
-        logging.info(f"TOC detection completed successfully: {result}")
+            raise UnsupportedFileFormatError("Only PDF and DOCX formats are supported.")
+        logging.info(f"TOC detection completed successfully for {file_path}")
         return result
-    except Exception as e:
-        logging.error(f"Error during TOC detection: {e}")
+    except TOCDetectionError as e:
+        logging.error(f"TOCDetectionError: {e}")
         raise
+    except Exception as e:
+        logging.error(f"Unexpected error during TOC detection for {file_path}: {e}")
+        raise FileProcessingError(f"Failed to process {file_path}") from e
 
 def detect_toc_pdf(file_path):
     """Detects TOC patterns in a PDF file."""
-    reader = PdfReader(file_path)
     toc_structure = []
-    for page in reader.pages:
-        text = page.extract_text()
-        matches = re.findall(r"\d+\.\s+\w+", text)
-        toc_structure.extend(matches)
-    return {"format": "PDF", "toc_structure": toc_structure}
+    try:
+        reader = PdfReader(file_path)
+        for page_number, page in enumerate(reader.pages, start=1):
+            text = page.extract_text()
+            if text:
+                matches = re.findall(PDF_TOC_REGEX, text)
+                # Flatten the matches if regex has groups
+                flat_matches = [".".join(filter(None, match)).strip() for match in matches]
+                toc_structure.extend(flat_matches)
+            else:
+                logging.warning(f"No text found on page {page_number} of {file_path}")
+        return {"format": "PDF", "toc_structure": toc_structure}
+    except Exception as e:
+        logging.error(f"Error processing PDF file {file_path}: {e}")
+        raise FileProcessingError(f"Error processing PDF file {file_path}") from e
 
 def detect_toc_docx(file_path):
     """Detects TOC patterns in a DOCX file."""
-    doc = Document(file_path)
     toc_structure = []
-    for paragraph in doc.paragraphs:
-        if match := re.search(r"\d+\.\s+\w+", paragraph.text):
-            toc_structure.append(match.group())
-    return {"format": "DOCX", "toc_structure": toc_structure}
-
-if __name__ == "__main__":
-    # Define the directory containing sample documents
-    sample_dir = os.path.join(project_root, "data", "sample_documents")
-
-    # Ensure the directory exists
-    if not os.path.exists(sample_dir):
-        print(f"Sample directory not found: {sample_dir}")
-        exit(1)
-
-    # List all PDF and DOCX files in the directory
-    files_to_process = [
-        os.path.join(sample_dir, file)
-        for file in os.listdir(sample_dir)
-        if file.endswith((".pdf", ".docx"))
-    ]
-
-    if not files_to_process:
-        print(f"No PDF or DOCX files found in: {sample_dir}")
-        exit(1)
-
-    # Process each file
-    for file_path in files_to_process:
-        print(f"Processing file: {file_path}")
-        try:
-            result = detect_toc(file_path)
-            print(f"Result for {file_path}:\n{result}")
-        except Exception as e:
-            print(f"Error processing {file_path}: {e}")
-
-    # Commit and push changes to GitHub
-    auto_commit_push("Processed multiple sample files for TOC detection")
+    try:
+        doc = Document(file_path)
+        for para_number, paragraph in enumerate(doc.paragraphs, start=1):
+            matches = re.findall(DOCX_TOC_REGEX, paragraph.text)
+            flat_matches = [".".join(filter(None, match)).strip() for match in matches]
+            toc_structure.extend(flat_matches)
+        return {"format": "DOCX", "toc_structure": toc_structure}
+    except Exception as e:
+        logging.error(f"Error processing DOCX file {file_path}: {e}")
+        raise FileProcessingError(f"Error processing DOCX file {file_path}") from e

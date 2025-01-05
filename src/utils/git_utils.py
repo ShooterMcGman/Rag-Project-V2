@@ -1,21 +1,29 @@
+# src/utils/git_utils.py
 
 import subprocess
+import logging
 
 def auto_commit_push(commit_message):
     """
-    Automatically stages, commits, and pushes changes to the GitHub repository.
+    Automatically commits and pushes changes to the Git repository.
 
     Args:
-        commit_message (str): A message describing the changes made in the commit.
+        commit_message (str): The commit message.
+
+    Raises:
+        subprocess.CalledProcessError: If Git commands fail.
     """
     try:
-        # Stage all changes
+        logging.info("Staging changes for commit...")
         subprocess.run(["git", "add", "."], check=True)
-        # Commit changes
+        
+        logging.info("Committing changes...")
         subprocess.run(["git", "commit", "-m", commit_message], check=True)
-        # Push to the master branch
-        subprocess.run(["git", "push", "origin", "master"], check=True)
-        print("✅ Changes committed and pushed successfully!")
+        
+        logging.info("Pushing to remote repository...")
+        subprocess.run(["git", "push"], check=True)
+        
+        logging.info("Git commit and push completed successfully.")
     except subprocess.CalledProcessError as e:
-        print(f"❌ Error during git operation: {e}")
-    
+        logging.error(f"Git command failed: {e}")
+        raise
